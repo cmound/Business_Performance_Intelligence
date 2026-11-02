@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { getQuarterRecord, getFinanceMetrics, getDatasetIssues, getQ4IllustrativeForecast } from './metrics'
-import { reportingQuarters, type Quarter } from './demoData'
+import { getQuarterRecord, getFinanceMetrics, getRevenueMetrics, getOperationsMetrics, getDatasetIssues, getQ4IllustrativeForecast } from './metrics'
+import { reportingQuarters, type Department, type Quarter, type Region } from './demoData'
 import './App.css'
 
 type Dashboard = 'finance' | 'revenue' | 'operations'
@@ -63,11 +63,12 @@ function ChartPanel({ title, description, children }: {
   )
 }
 
-function BarComparison({ label, actual, budget, scale }: {
+function BarComparison({ label, actual, budget, scale, targetLabel = 'Budget' }: {
   label: string
   actual: number
   budget: number
   scale: number
+  targetLabel?: string
 }) {
   return (
     <div className="bar-comparison">
@@ -80,7 +81,7 @@ function BarComparison({ label, actual, budget, scale }: {
         <span className="bar-amount">{money(actual)}</span>
       </div>
       <div className="bar-line">
-        <span className="bar-name">Budget</span>
+        <span className="bar-name">{targetLabel}</span>
         <div className="bar-track" aria-hidden="true">
           <div className="bar-fill budget-fill" style={{ width: `${budget / scale * 100}%` }} />
         </div>
@@ -243,26 +244,274 @@ function FinanceDashboard() {
   )
 }
 
-function PlannedDashboard({ title, number, details }: {
-  title: string
-  number: string
-  details: string
-}) {
+type RegionSelection = Region | 'All Regions'
+
+const regionOptions: readonly RegionSelection[] = ['All Regions', 'West', 'Central', 'East']
+const departmentOptions: readonly Department[] = ['Sales Operations', 'Customer Support', 'Fulfillment']
+
+function isRegionSelection(value: string): value is RegionSelection {
+  return regionOptions.some((option) => option === value)
+}
+
+function isDepartment(value: string): value is Department {
+  return departmentOptions.some((option) => option === value)
+}
+
+function RevenueDashboard() {
+  const [region, setRegion] = useState<RegionSelection>('All Regions')
+  const quarter = '2026-Q3'
+  const metrics = getRevenueMetrics(quarter, region)
+  const regionalResults = getQuarterRecord(quarter).regions.map((item) => ({
+    region: item.region,
+    ...getRevenueMetrics(quarter, item.region),
+  }))
+  const quarterTrend = reportingQuarters.map((period) => ({
+    quarter: period,
+    ...getRevenueMetrics(period, region),
+  }))
+  const regionalScale = Math.max(1, ...regionalResults.flatMap((item) => [item.revenue, item.target]))
+  const trendScale = Math.max(1, ...quarterTrend.flatMap((item) => [item.revenue, item.target]))
+  const quotaVariance = metrics.revenue - metrics.target
+  const companyRevenue = getRevenueMetrics(quarter, 'All Regions').revenue
+  const leader = [...regionalResults].sort(
+    (first, second) => (second.attainment ?? 0) - (first.attainment ?? 0),
+  )[0]
+  const forecastGrowth = getQ4IllustrativeForecast().revenue / getFinanceMetrics(quarter).revenueActual - 1
+  const projectedRevenue = metrics.revenue * (1 + forecastGrowth)
+
   return (
-    <section className="dashboard-content" aria-labelledby="planned-heading">
+    <section className="dashboard-content" aria-labelledby="revenue-heading">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">Dashboard {number} / Planned</p>
-          <h2 id="planned-heading">{title}</h2>
-          <p className="page-subtitle">{details}</p>
+          <p className="eyebrow">Dashboard 02 / Commercial performance</p>
+          <h2 id="revenue-heading">Revenue Operations &amp; Commercial Performance</h2>
+          <p className="page-subtitle">Revenue realization, quota attainment, closed-deal conversion, and regional comparisons.</p>
         </div>
+        <label className="filter-control">
+          <span>Sales region</span>
+          <select value={region} onChange={(event) => {
+            if (isRegionSelection(event.target.value)) setRegion(event.target.value)
+          }}>
+            {regionOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </label>
       </div>
-      <div className="planned-panel">
-        <div className="planned-icon" aria-hidden="true">↗</div>
-        <h3>Dashboard foundation established</h3>
-        <p>This section will use the same synthetic 2026 dataset, reconciled calculations, and executive layout. Interactive KPIs, charts, and insights will be implemented in the next development phase.</p>
-        <span className="planned-tag">Not yet a completed demonstration</span>
+
+      <div className="report-banner">
+        <span className="report-dot" aria-hidden="true" />
+        Showing completed-period actuals for <strong>Q3 2026 · {region}</strong>. Revenue targets equal regional budgets in this fictional dataset.
       </div>
+
+      <div className="kpi-grid">
+        <KpiCard title="Recognized sales revenue" value={money(metrics.revenue)} detail={`Quota: ${money(metrics.target)}`} />
+        <KpiCard
+          title="Revenue quota attainment"
+          value={metrics.attainment === null ? 'N/A' : percent(metrics.attainment)}
+          detail={`${money(Math.abs(quotaVariance))} ${quotaVariance >= 0 ? 'above' : 'below'} quota`}
+          status={quotaVariance >= 0 ? 'positive' : 'negative'}
+        />
+        <KpiCard
+          title="Closed-deal win rate"
+          value={metrics.winRate === null ? 'N/A' : percent(metrics.winRate)}
+          detail={`${metrics.wonDeals} won / ${metrics.wonDeals + metrics.lostDeals} decided deals`}
+        />
+        <KpiCard
+          title="Qualified pipeline value"
+          value={money(metrics.qualifiedPipeline)}
+          detail="Open opportunities, not earned revenue"
+        />
+      </div>
+
+      <div className="chart-grid">
+        <ChartPanel
+          title="Regional revenue | actual vs. quota"
+          description="All three Q3 regions remain visible for context; the selected region is highlighted."
+        >
+          <div className="bar-chart" role="group" aria-label="Regional actual and quota revenue, with numeric values">
+            {regionalResults.map((item) => (
+              <div key={item.region} className={region === item.region ? 'selected-period' : ''}>
+                <BarComparison label={item.region} actual={item.revenue} budget={item.target} scale={regionalScale} targetLabel="Quota" />
+              </div>
+            ))}
+          </div>
+        </ChartPanel>
+        <ChartPanel
+          title="Revenue trend | actual vs. quota"
+          description={`Completed quarterly results for ${region.toLowerCase()}. The Q3 reporting period is highlighted.`}
+        >
+          <div className="bar-chart" role="group" aria-label="Quarterly actual and quota revenue with numeric values">
+            {quarterTrend.map((item) => (
+              <div key={item.quarter} className={item.quarter === quarter ? 'selected-period' : ''}>
+                <BarComparison label={quarterLabel(item.quarter)} actual={item.revenue} budget={item.target} scale={trendScale} targetLabel="Quota" />
+              </div>
+            ))}
+          </div>
+        </ChartPanel>
+      </div>
+
+      <section className="insights-panel" aria-labelledby="revenue-insights-heading">
+        <div className="insights-header">
+          <div>
+            <p className="eyebrow">Management interpretation</p>
+            <h3 id="revenue-insights-heading">Executive insights · {region}</h3>
+          </div>
+          <span className="insights-label">Calculated from selected Q3 data</span>
+        </div>
+        <div className="insights-grid">
+          <div className="insight-item">
+            <span className="insight-number">01</span>
+            <p>Revenue was <strong>{money(Math.abs(quotaVariance))} {quotaVariance >= 0 ? 'above' : 'below'} target</strong>, representing {metrics.attainment === null ? 'N/A' : percent(metrics.attainment)} quota attainment.</p>
+          </div>
+          <div className="insight-item">
+            <span className="insight-number">02</span>
+            <p>The win rate was <strong>{metrics.winRate === null ? 'N/A' : percent(metrics.winRate)}</strong> across {metrics.wonDeals + metrics.lostDeals} decided deals. Qualified open pipeline totals <strong>{money(metrics.qualifiedPipeline)}</strong>.</p>
+          </div>
+          <div className="insight-item">
+            <span className="insight-number">03</span>
+            {region === 'All Regions'
+              ? <p>{leader ? <><strong>{leader.region}</strong> led quota attainment at {leader.attainment === null ? 'N/A' : percent(leader.attainment)}.</> : 'Regional comparisons are unavailable.'} Assess the regional gaps before adjusting commercial priorities.</p>
+              : <p><strong>{region}</strong> accounted for {companyRevenue > 0 ? percent(metrics.revenue / companyRevenue) : 'N/A'} of total company revenue. Compare its attainment with the other regions before reallocating support.</p>}
+          </div>
+        </div>
+      </section>
+
+      <section className="forecast-strip" aria-label="Illustrative revenue projection">
+        <div>
+          <p className="eyebrow">Illustrative Q4 2026 revenue projection · {region}</p>
+          <strong>{money(projectedRevenue)} projected revenue</strong>
+          <p>Q3 recognized revenue increased by {percent(forecastGrowth)}, using the same companywide assumption as Finance. No pipeline conversion or new deals are assumed.</p>
+        </div>
+        <div className="forecast-profit">
+          <span>Projection basis</span>
+          <strong>Q3 actuals</strong>
+        </div>
+      </section>
+    </section>
+  )
+}
+
+function OperationsDashboard() {
+  const [department, setDepartment] = useState<Department>('Sales Operations')
+  const quarter = '2026-Q3'
+  const metrics = getOperationsMetrics(quarter, department)
+  const previous = getOperationsMetrics('2026-Q2', department)
+  const departmentData = getQuarterRecord(quarter).departments.find((item) => item.department === department)
+  const departmentalResults = getQuarterRecord(quarter).departments.map((item) => ({
+    department: item.department,
+    ...getOperationsMetrics(quarter, item.department),
+  }))
+  const productivityTrend = reportingQuarters.map((period) => ({
+    quarter: period,
+    ...getOperationsMetrics(period, department),
+  }))
+  const expenseScale = Math.max(1, ...departmentalResults.flatMap((item) => [item.expenseActual, item.expenseBudget]))
+  const productivityScale = Math.max(1, ...productivityTrend.map((item) => item.unitsPerHour ?? 0))
+  const productivityChange = metrics.unitsPerHour !== null && previous.unitsPerHour !== null && previous.unitsPerHour > 0
+    ? metrics.unitsPerHour / previous.unitsPerHour - 1
+    : null
+  const expenseFavorable = metrics.favorableExpenseVariance >= 0
+  const outstandingMilestones = metrics.totalMilestones - metrics.completedMilestones
+
+  return (
+    <section className="dashboard-content" aria-labelledby="operations-heading">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">Dashboard 03 / Operational performance</p>
+          <h2 id="operations-heading">Business Operations &amp; Strategy</h2>
+          <p className="page-subtitle">Departmental cost control, throughput per labor hour, and strategic milestone execution.</p>
+        </div>
+        <label className="filter-control">
+          <span>Department</span>
+          <select value={department} onChange={(event) => {
+            if (isDepartment(event.target.value)) setDepartment(event.target.value)
+          }}>
+            {departmentOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+          </select>
+        </label>
+      </div>
+
+      <div className="report-banner">
+        <span className="report-dot" aria-hidden="true" />
+        Showing completed-period actuals for <strong>Q3 2026 · {department}</strong>. Productivity measures are department-specific and not comparable across different work units.
+      </div>
+
+      <div className="kpi-grid">
+        <KpiCard title="Operating costs" value={money(metrics.expenseActual)} detail={`Budget: ${money(metrics.expenseBudget)}`} />
+        <KpiCard
+          title="Operating cost variance"
+          value={signedMoney(metrics.favorableExpenseVariance)}
+          detail={expenseFavorable ? 'Favorable / under budget' : 'Unfavorable / over budget'}
+          status={expenseFavorable ? 'positive' : 'negative'}
+        />
+        <KpiCard
+          title="Productivity rate"
+          value={metrics.unitsPerHour === null ? 'N/A' : `${metrics.unitsPerHour.toFixed(2)} /hr`}
+          detail={departmentData ? departmentData.unitLabel : 'Completed units per labor hour'}
+        />
+        <KpiCard
+          title="Initiative completion"
+          value={metrics.initiativeCompletion === null ? 'N/A' : percent(metrics.initiativeCompletion)}
+          detail={`${metrics.completedMilestones} of ${metrics.totalMilestones} milestones completed`}
+        />
+      </div>
+
+      <div className="chart-grid">
+        <ChartPanel
+          title="Department costs | actual vs. budget"
+          description="All Q3 departments shown for expense context; selected department highlighted."
+        >
+          <div className="bar-chart" role="group" aria-label="Department operating costs and budgets, with numeric values">
+            {departmentalResults.map((item) => (
+              <div key={item.department} className={item.department === department ? 'selected-period' : ''}>
+                <BarComparison label={item.department} actual={item.expenseActual} budget={item.expenseBudget} scale={expenseScale} />
+              </div>
+            ))}
+          </div>
+        </ChartPanel>
+        <ChartPanel
+          title="Productivity | completed units per labor hour"
+          description={`Quarterly throughput within ${department}; the work unit remains consistent across periods.`}
+        >
+          <div className="expense-chart bar-chart" role="group" aria-label="Quarterly productivity with numeric values">
+            {productivityTrend.map((item) => (
+              <div className={item.quarter === quarter ? 'expense-row selected-period' : 'expense-row'} key={item.quarter}>
+                <div className="expense-label">
+                  <span>{quarterLabel(item.quarter)}</span>
+                  <strong>{item.unitsPerHour === null ? 'N/A' : `${item.unitsPerHour.toFixed(2)} units/hr`}</strong>
+                </div>
+                <div className="bar-track" aria-hidden="true">
+                  <div className="bar-fill expense-fill" style={{ width: `${(item.unitsPerHour ?? 0) / productivityScale * 100}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="chart-total">Throughput indicator: <strong>completed work units ÷ labor hours</strong>.</p>
+        </ChartPanel>
+      </div>
+
+      <section className="insights-panel" aria-labelledby="operations-insights-heading">
+        <div className="insights-header">
+          <div>
+            <p className="eyebrow">Management interpretation</p>
+            <h3 id="operations-insights-heading">Executive insights · {department}</h3>
+          </div>
+          <span className="insights-label">Calculated from selected Q3 data</span>
+        </div>
+        <div className="insights-grid">
+          <div className="insight-item">
+            <span className="insight-number">01</span>
+            <p>Operating costs were <strong>{money(Math.abs(metrics.favorableExpenseVariance))} {expenseFavorable ? 'under' : 'over'} budget</strong>, a {metrics.expenseBudget > 0 ? percent(Math.abs(metrics.favorableExpenseVariance) / metrics.expenseBudget) : 'N/A'} {expenseFavorable ? 'favorable' : 'unfavorable'} difference.</p>
+          </div>
+          <div className="insight-item">
+            <span className="insight-number">02</span>
+            <p>Throughput was <strong>{metrics.unitsPerHour === null ? 'N/A' : metrics.unitsPerHour.toFixed(2)} units per hour</strong>, {productivityChange === null ? 'with no valid prior-period comparison' : `${percent(Math.abs(productivityChange))} ${productivityChange >= 0 ? 'higher' : 'lower'} than Q2`}.</p>
+          </div>
+          <div className="insight-item">
+            <span className="insight-number">03</span>
+            <p><strong>{metrics.completedMilestones} of {metrics.totalMilestones}</strong> strategic milestones were completed, with {outstandingMilestones} remaining. Review remaining milestones alongside cost and productivity trends.</p>
+          </div>
+        </div>
+      </section>
     </section>
   )
 }
@@ -321,20 +570,8 @@ function App() {
             </div>
           )}
           {dashboard === 'finance' && <FinanceDashboard />}
-          {dashboard === 'revenue' && (
-            <PlannedDashboard
-              number="02"
-              title="Revenue Operations & Commercial Performance"
-              details="Sales performance, pipeline health, quota attainment, and regional comparisons."
-            />
-          )}
-          {dashboard === 'operations' && (
-            <PlannedDashboard
-              number="03"
-              title="Business Operations & Strategy"
-              details="Departmental cost efficiency, productivity, and strategic initiative execution."
-            />
-          )}
+          {dashboard === 'revenue' && <RevenueDashboard />}
+          {dashboard === 'operations' && <OperationsDashboard />}
           <footer className="site-footer">
             <span>Business Performance Intelligence · Portfolio Demonstration</span>
             <span>All company details and figures are fictional. Not investment or financial advice.</span>
