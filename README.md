@@ -22,11 +22,29 @@ The portfolio emphasizes **financial analysis, performance measurement, manageme
 
 Every dashboard includes four KPIs, two labeled visual comparisons, and dynamically calculated executive insights. The Finance dashboard also presents a clearly identified **illustrative Q4 2026 outlook**.
 
-## Dashboard screenshot
+## Dashboard gallery
 
-![Strategic Finance and FP&A dashboard showing Q3 synthetic performance](public/screenshots/finance-dashboard.png)
+These screenshots show the three executive dashboards with the default Q3 2026 synthetic reporting data. Open the [live application](https://cmound.github.io/Business_Performance_Intelligence/) to explore the filters and their calculated KPIs, visual comparisons, and management insights.
 
-*Finance dashboard captured during local development. The full application includes two additional dashboards; screenshots of Revenue Operations and Business Operations should be captured from the deployed application after final visual verification.*
+### 1. Strategic Finance & FP&A
+
+![Strategic Finance and FP&A dashboard with quarterly revenue actual-versus-budget comparisons and operating cost breakdown](public/screenshots/finance-dashboard.png)
+
+**Decision focus:** Budget variances, revenue growth, operating margins, expense drivers, and an assumption-based Q4 outlook.
+
+### 2. Revenue Operations & Commercial Performance
+
+![Revenue Operations dashboard showing Q3 recognized revenue, quota attainment, deal win rate, regional performance, and qualified pipeline](public/screenshots/revenue-dashboard.png)
+
+**Decision focus:** Regional quota attainment, sales performance, closed-deal win rates, qualified pipeline, and an illustrative revenue projection.
+
+### 3. Business Operations & Strategy
+
+![Business Operations dashboard showing departmental costs, budget variances, labor productivity, and strategic initiative milestones](public/screenshots/operations-dashboard.png)
+
+**Decision focus:** Departmental cost control, work output per labor hour, operational performance, and strategic initiative completion.
+
+*All screenshots and measures are fictional portfolio demonstrations, not real company results.*
 
 ## Example management interpretation
 
